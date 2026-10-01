@@ -1,4 +1,16 @@
+// Synth voices. Everything is generated from oscillators and a noise buffer —
+// there are no audio assets and no audio dependencies.
+//
+// Each function takes (ctx, dest, ev) and schedules itself at ev.time on the
+// given context's clock, which is why the same code serves live playback and
+// offline WAV rendering unchanged.
+
+// Cached across contexts: generating two seconds of noise per hat hit would be
+// wasteful, and the content is never listened to, only filtered.
 let sharedNoise = null;
+
+// Every live source per context, so Stop can release the whole graph at once.
+// A WeakMap keyed on ctx avoids keeping a closed context alive.
 const sourcesByCtx = new WeakMap();
 
 function track(ctx, node) {
@@ -12,6 +24,13 @@ function track(ctx, node) {
   return node;
 }
 
+/**
+ * Stops every tracked source on a context. Called on Stop and at the start of
+ * each playback run, so restarting mid-piece never stacks two performances.
+ *
+ * Sources are stopped 30ms in the future rather than immediately: long enough
+ * to avoid an audible click, short enough that Stop feels instant.
+ */
 export function stopAllVoices(ctx) {
   const set = sourcesByCtx.get(ctx);
   if (!set) return;
@@ -26,6 +45,9 @@ export function stopAllVoices(ctx) {
   set.clear();
 }
 
+/**
+ * Two seconds of white noise, shared by every percussion voice.
+ */
 export function noiseBuffer(ctx) {
   if (sharedNoise && sharedNoise.sampleRate === ctx.sampleRate) {
     return sharedNoise;
@@ -40,6 +62,13 @@ export function noiseBuffer(ctx) {
   return buffer;
 }
 
+/**
+ * One oscillator plus an exponential decay envelope. The classic subtractive
+ * synth shape; `type` selects the waveform and `detune` detunes in cents.
+ *
+ * The envelope never reaches zero — exponential ramps cannot target 0, so it
+ * parks just above it. Reaching literal silence would click on every note.
+ */
 function tone(ctx, dest, at, opts) {
   const { freq, duration, velocity, type, detune = 0 } = opts;
   const osc = ctx.createOscillator();
@@ -59,6 +88,10 @@ function tone(ctx, dest, at, opts) {
   osc.stop(at + duration + 0.05);
 }
 
+/**
+ * A burst of filtered noise — the basis of every drum voice. The biquad filter
+ * is what separates the kit: highpass for hats, bandpass for the snare body.
+ */
 function noiseHit(ctx, dest, at, opts) {
   const { duration, velocity, filterType, freq, q = 1 } = opts;
   const src = ctx.createBufferSource();
@@ -80,6 +113,7 @@ function noiseHit(ctx, dest, at, opts) {
   src.stop(at + duration + 0.02);
 }
 
+/** Lead: a triangle, cutting through the mix so the melody stays legible. */
 export function playLead(ctx, dest, ev) {
   tone(ctx, dest, ev.time, {
     freq: ev.freq,
@@ -89,6 +123,10 @@ export function playLead(ctx, dest, ev) {
   });
 }
 
+/**
+ * Pad: two sawtooths detuned +/-7 cents. The beating between them widens the
+ * tone, so a single letter sustains as a chord rather than a plain pitch.
+ */
 export function playPad(ctx, dest, ev) {
   tone(ctx, dest, ev.time, {
     freq: ev.freq,
@@ -106,6 +144,10 @@ export function playPad(ctx, dest, ev) {
   });
 }
 
+/**
+ * Bass: a sawtooth an octave down, run through a resonant lowpass so it reads
+ * as weight at the bottom rather than as a thin low note.
+ */
 export function playBass(ctx, dest, ev) {
   const filter = ctx.createBiquadFilter();
   filter.type = 'lowpass';
@@ -121,6 +163,7 @@ export function playBass(ctx, dest, ev) {
   });
 }
 
+/** Kick: a sine swept 110Hz down to 45Hz, which is what produces the thump. */
 export function playKick(ctx, dest, ev) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -137,6 +180,7 @@ export function playKick(ctx, dest, ev) {
   osc.stop(ev.time + 0.32);
 }
 
+/** Snare: bandpassed noise for the rattle plus a tuned triangle for the body. */
 export function playSnare(ctx, dest, ev) {
   noiseHit(ctx, dest, ev.time, {
     duration: 0.16,
@@ -153,6 +197,7 @@ export function playSnare(ctx, dest, ev) {
   });
 }
 
+/** Hat: highpassed noise, very short, sitting above everything else. */
 export function playHat(ctx, dest, ev) {
   noiseHit(ctx, dest, ev.time, {
     duration: 0.05,
@@ -162,6 +207,7 @@ export function playHat(ctx, dest, ev) {
   });
 }
 
+/** Tom: like the kick but higher and shorter, used to fill end-of-bar rolls. */
 export function playTom(ctx, dest, ev) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -178,6 +224,9 @@ export function playTom(ctx, dest, ev) {
   osc.stop(ev.time + 0.26);
 }
 
+// The voice name carried on each composed event selects the synth here. An
+// unknown name is ignored rather than throwing, so a malformed event degrades
+// to silence instead of breaking a whole performance.
 const VOICES = {
   lead: playLead,
   pad: playPad,
@@ -188,6 +237,10 @@ const VOICES = {
   tom: playTom,
 };
 
+/**
+ * Dispatches one event to its voice. This is the only entry point the engine
+ * and the offline renderer both use.
+ */
 export function playEvent(ctx, dest, ev) {
   const voice = VOICES[ev.voice];
   if (voice) voice(ctx, dest, ev);

@@ -1,3 +1,9 @@
+// Canvas piano-roll.
+//
+// Reads the same Event[] as playback, so notes cannot appear out of sync with
+// what is heard. The roll occupies the upper area by pitch; percussion sits in
+// fixed lanes along the bottom.
+
 const COLORS = {
   lead: '#4fd1c5',
   pad: '#7c8cf8',
@@ -17,6 +23,11 @@ export function createVisualizer(canvas) {
   let maxMidi = 0;
   let raf = null;
 
+  /**
+   * Matches the backing store to the CSS size and device pixel ratio.
+   * Called from draw() rather than only on window resize, so the canvas is
+   * also correct on first paint.
+   */
   function resize() {
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
@@ -26,6 +37,13 @@ export function createVisualizer(canvas) {
     return rect;
   }
 
+  /**
+ * Installs a new piece and recomputes the vertical range.
+ *
+ * The pitch window is derived from the notes actually present, with a one
+ * octave floor so short or single-pitch pieces still fill the canvas instead
+ * of collapsing to a flat line.
+ */
   function setEvents(next) {
     events = next;
     duration = events.length
@@ -43,6 +61,12 @@ export function createVisualizer(canvas) {
     if (maxMidi - minMidi < 12) maxMidi = minMidi + 12;
   }
 
+  /**
+ * Paints one frame. Redraws from scratch — at these event counts that is far
+ * cheaper than tracking dirty regions.
+ *
+ * @param position playhead position in seconds, or 0 when stopped
+ */
   function draw(position) {
     const rect = resize();
     const w = rect.width;
@@ -51,6 +75,7 @@ export function createVisualizer(canvas) {
     ctx.fillStyle = '#0d1017';
     ctx.fillRect(0, 0, w, h);
 
+    // Percussion gets fixed lanes along the bottom; the roll takes the rest.
     const drumLanes = 5;
     const drumHeight = Math.min(28, h / (drumLanes + 2));
     const drumTop = h - drumLanes * drumHeight;
@@ -80,6 +105,7 @@ export function createVisualizer(canvas) {
     const laneIndex = { kick: 0, snare: 1, hat: 2, tom: 3 };
 
     for (const ev of events) {
+      // duration is guarded against zero so an empty piece cannot divide by 0.
       const x = (ev.time / Math.max(0.001, duration)) * w;
       const color = COLORS[ev.voice] ?? '#666';
 
@@ -87,6 +113,7 @@ export function createVisualizer(canvas) {
         const lane = laneIndex[ev.voice];
         if (lane === undefined) continue;
         const cy = h - (lane + 0.5) * drumHeight;
+        // Diamond size scales with velocity, so accents read louder on screen.
         const r = Math.min(4, drumHeight * 0.25) * (0.6 + ev.velocity * 0.6);
         ctx.fillStyle = color;
         ctx.beginPath();
@@ -97,10 +124,12 @@ export function createVisualizer(canvas) {
         ctx.closePath();
         ctx.fill();
       } else {
+        // Notes are horizontal bars: x is time, y is pitch, width is duration.
         const norm = (ev.midi - minMidi) / span;
         const y = drumTop - norm * rollHeight;
         const wpx = Math.max(2, (ev.duration / Math.max(0.001, duration)) * w);
         ctx.fillStyle = color;
+        // Opacity doubles as velocity, so a loud uppercase letter shows brighter.
         ctx.globalAlpha = 0.35 + ev.velocity * 0.65;
         ctx.fillRect(x, y - 2, wpx, 4);
         ctx.globalAlpha = 1;
@@ -124,11 +153,17 @@ export function createVisualizer(canvas) {
     raf = requestAnimationFrame(() => loop(getPosition));
   }
 
+  /**
+   * Starts the render loop. `getPosition` is called each frame to read the
+   * playhead; it is a callback because the visualizer must not depend on the
+   * audio scheduler.
+   */
   function start(getPosition) {
     stop();
     raf = requestAnimationFrame(() => loop(getPosition));
   }
 
+  /** Cancels the pending frame, if any. Safe to call when already stopped. */
   function stop() {
     if (raf !== null) {
       cancelAnimationFrame(raf);
