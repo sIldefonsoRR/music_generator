@@ -118,12 +118,15 @@ export function createVisualizer(canvas) {
 
   function loop(getPosition) {
     draw(getPosition());
-    raf = requestAnimationFrame(loop);
+    // Re-arm through the closure, not as a bare `loop`: a bare reference would
+    // drop getPosition, so the second frame would call undefined and the
+    // animation loop would die after exactly one frame.
+    raf = requestAnimationFrame(() => loop(getPosition));
   }
 
   function start(getPosition) {
     stop();
-    raf = requestAnimationFrame(loop.bind(null, getPosition));
+    raf = requestAnimationFrame(() => loop(getPosition));
   }
 
   function stop() {

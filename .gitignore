@@ -173,3 +173,4 @@ cython_debug/
 # Node
 node_modules/
 package-lock.json.bak
+.playwright-mcp/
