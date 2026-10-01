@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Text to Music</title>
+  </head>
+  <body>
+    <div id="app">
+      <section class="panel panel--text">
+        <label for="text-input" class="label">Text</label>
+        <textarea
+          id="text-input"
+          class="textarea"
+          spellcheck="false"
+          placeholder="Type text. Every letter becomes a note; punctuation becomes drums."
+        ></textarea>
+        <p id="text-notice" class="notice" hidden></p>
+      </section>
+
+      <section class="panel panel--controls">
+        <div id="controls"></div>
+      </section>
+
+      <section class="panel panel--viz">
+        <canvas id="piano-roll" class="canvas"></canvas>
+      </section>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
