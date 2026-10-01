@@ -118,8 +118,9 @@ come from the PRNG, which never overrides a letter's pitch.
 ### Timing
 
 A 16th-note grid at the chosen tempo. Each letter advances one step, so piece
-length is proportional to text length: 200 letters at 120 BPM runs about 50
-seconds. Melody and drums read the same clock, so they stay in phase.
+length is proportional to text length: at 120 BPM a step is 0.125s, so 200
+letters runs about 25 seconds. Melody and drums read the same clock, so they
+stay in phase.
 
 - **Space**: shortens the following step, acting as a light rest that keeps the
   pulse. Produces no note.
@@ -157,13 +158,18 @@ them differently from melodic notes.
   time:      number,  // seconds from piece start
   duration:  number,  // seconds
   freq:      number,  // Hz, null for percussion
+  midi:      number,  // MIDI note, null for percussion
   velocity:  number,  // 0..1
   voice:     string,  // 'bass' | 'lead' | 'pad' | 'kick' | 'snare' | 'hat' | 'tom'
   drum:      boolean, // distinguishes percussion from melody
+  accent:    boolean, // true when the event came from punctuation
   char:      string,  // source character, for the visualizer
   charIndex: number   // index into the source text
 }
 ```
+
+`midi` is carried alongside `freq` so the piano-roll can place notes on pitch
+lanes without re-deriving the note number from a frequency.
 
 `char` and `charIndex` are retained so the piano-roll can be read back against
 the original text. This project does not highlight characters live in the
