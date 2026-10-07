@@ -23,6 +23,7 @@ Then type in the text box and press **Play**.
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run build` | Production build into `dist/` |
 | `npm run preview` | Serve the production build locally |
+| `npm run sbom` | Regenerate the SBOM into `sbom.cdx.json` |
 
 ## How text becomes music
 
@@ -118,3 +119,19 @@ The test environment is Node, so `music/` and the WAV encoder are tested
 directly. Web Audio voice construction has no unit tests — asserting on a node
 graph would test the browser rather than our logic — so those voices are
 exercised through the scheduler and the offline renderer instead.
+
+## SBOM
+
+`sbom.cdx.json` is a CycloneDX 1.5 software bill of materials listing every
+package in `package-lock.json`. The app ships no runtime dependencies, so every
+entry is build or test tooling (Vite, Vitest, and their transitive packages).
+
+Regenerate it after changing dependencies:
+
+```bash
+npm run sbom
+```
+
+Each run writes a fresh serial number and timestamp, so the file shows a diff
+even when the dependency set is unchanged. Only commit it when dependencies
+actually change.
