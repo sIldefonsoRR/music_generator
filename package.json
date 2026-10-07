@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "sbom": "npm sbom --sbom-format cyclonedx --package-lock-only > sbom.cdx.json"
   },
   "devDependencies": {
     "vite": "^5.4.0",
